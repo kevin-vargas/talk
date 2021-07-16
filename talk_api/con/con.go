@@ -3,7 +3,7 @@ package con
 import (
 	"log"
 	"net/http"
-	"talk_api/constant"
+	"talk/talk_api/constant"
 
 	"github.com/gorilla/websocket"
 )
@@ -23,10 +23,11 @@ type Package struct {
 
 type ConnectionManager struct {
 	websocket.Upgrader
-	clients         []*Client
-	incomingPackage chan *Package
-	incomingClient  chan *Client
-	headerGen       <-chan *header
+	clients             []*Client
+	incomingPackage     chan *Package
+	incomingClient      chan *Client
+	incomingCloseClient chan *Client
+	headerGen           <-chan *header
 }
 
 func New() ConnectionManager {
@@ -34,6 +35,7 @@ func New() ConnectionManager {
 		websocket.Upgrader{},
 		[]*Client{},
 		make(chan *Package, constant.MAX_PACKAGE_QUEUE),
+		make(chan *Client, constant.MAX_CLIENT_QUEUE),
 		make(chan *Client, constant.MAX_CLIENT_QUEUE),
 		makeHeaderGen(0),
 	}
@@ -51,7 +53,12 @@ func (cm ConnectionManager) AddClient(w http.ResponseWriter, req *http.Request) 
 	cm.incomingClient <- &client
 	for {
 		// Receive message
-		_, message, _ := conn.ReadMessage()
+		_, message, err := conn.ReadMessage()
+		if err != nil {
+			log.Printf("error: %v", err)
+			cm.incomingCloseClient <- &client
+			break
+		}
 		pack := Package{
 			head,
 			message,
@@ -68,8 +75,22 @@ func (cm ConnectionManager) Run() {
 			broadcast(pack, cm.clients)
 		case conn := <-cm.incomingClient:
 			cm.clients = append(cm.clients, conn)
+		case closeConn := <-cm.incomingCloseClient:
+			cm.clients = removeClient(cm.clients, closeConn)
 		}
 	}
+}
+
+func removeClient(clients []*Client, client *Client) (result []*Client) {
+	predicate := func(c *Client) {
+		if c.Header != client.Header {
+			result = append(result, c)
+		}
+	}
+	for i := 0; i < len(clients); i++ {
+		predicate(clients[i])
+	}
+	return result
 }
 
 // Need add graceful close

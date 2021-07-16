@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"talk_api/service"
+	"talk/talk_api/service"
 
 	"github.com/gin-gonic/gin"
 )

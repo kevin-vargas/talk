@@ -4,9 +4,9 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"talk_api/con"
-	"talk_api/controller"
-	"talk_api/service"
+	"talk/talk_api/con"
+	"talk/talk_api/controller"
+	"talk/talk_api/service"
 
 	"github.com/gin-gonic/gin"
 )
