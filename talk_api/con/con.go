@@ -8,9 +8,22 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+type eventType int
+
+const (
+	CREATED eventType = iota
+	CLOSED
+)
+
 type header struct {
 	Id int
 }
+
+type Event struct {
+	eventType
+	Client *Client
+}
+
 type Client struct {
 	Header *header
 	Socket *websocket.Conn
@@ -23,11 +36,10 @@ type Package struct {
 
 type ConnectionManager struct {
 	websocket.Upgrader
-	clients             []*Client
-	incomingPackage     chan *Package
-	incomingClient      chan *Client
-	incomingCloseClient chan *Client
-	headerGen           <-chan *header
+	clients         []*Client
+	incomingPackage chan *Package
+	incomingEvent   chan *Event
+	headerGen       <-chan *header
 }
 
 func New() ConnectionManager {
@@ -35,8 +47,7 @@ func New() ConnectionManager {
 		websocket.Upgrader{},
 		[]*Client{},
 		make(chan *Package, constant.MAX_PACKAGE_QUEUE),
-		make(chan *Client, constant.MAX_CLIENT_QUEUE),
-		make(chan *Client, constant.MAX_CLIENT_QUEUE),
+		make(chan *Event, constant.MAX_CLIENT_QUEUE),
 		makeHeaderGen(0),
 	}
 }
@@ -50,13 +61,21 @@ func (cm ConnectionManager) AddClient(w http.ResponseWriter, req *http.Request) 
 		head,
 		conn,
 	}
-	cm.incomingClient <- &client
+	event := Event{
+		CREATED,
+		&client,
+	}
+	cm.incomingEvent <- &event
 	for {
 		// Receive message
 		_, message, err := conn.ReadMessage()
 		if err != nil {
 			log.Printf("error: %v", err)
-			cm.incomingCloseClient <- &client
+			event := Event{
+				CLOSED,
+				&client,
+			}
+			cm.incomingEvent <- &event
 			break
 		}
 		pack := Package{
@@ -73,14 +92,16 @@ func (cm ConnectionManager) Run() {
 		select {
 		case pack := <-cm.incomingPackage:
 			broadcast(pack, cm.clients)
-		case conn := <-cm.incomingClient:
-			cm.clients = append(cm.clients, conn)
-		case closeConn := <-cm.incomingCloseClient:
-			cm.clients = removeClient(cm.clients, closeConn)
+		case event := <-cm.incomingEvent:
+			switch event.eventType {
+			case CREATED:
+				cm.clients = append(cm.clients, event.Client)
+			case CLOSED:
+				cm.clients = removeClient(cm.clients, event.Client)
+			}
 		}
 	}
 }
-
 func removeClient(clients []*Client, client *Client) (result []*Client) {
 	predicate := func(c *Client) {
 		if c.Header != client.Header {
