@@ -11,11 +11,13 @@ const (
 )
 
 type WorkManager struct {
-	jobs     chan []*Job
-	jobBatch chan *Job
+	jobs                     chan []*Job
+	jobBatch                 chan *Job
+	jobReadyNotfication      func()
+	executeEmptyNotification func()
 }
 
-func New() *WorkManager {
+func New(jobReadyNotfication func(), executeEmptyNotification func()) *WorkManager {
 	jobBatch := make(chan *Job, MAX_JOB_QUANTITY)
 	jobs := make(chan []*Job, MAX_JOB_QUANTITY)
 	go func() {
@@ -29,6 +31,7 @@ func New() *WorkManager {
 				case <-time.After(TIMEOUT * time.Second):
 					fmt.Println("ADDING TIMEOUT")
 					jobs <- sliceJob
+					jobReadyNotfication()
 					break L
 				}
 
@@ -39,6 +42,8 @@ func New() *WorkManager {
 	return &WorkManager{
 		jobs,
 		jobBatch,
+		jobReadyNotfication,
+		executeEmptyNotification,
 	}
 }
 func (wm *WorkManager) AddJob(fn func()) {
@@ -47,19 +52,24 @@ func (wm *WorkManager) AddJob(fn func()) {
 }
 
 func (wm *WorkManager) ExecuteJob() {
-	fmt.Println("EXECUTING JOBS")
-	batchJobs := <-wm.jobs
-	fmt.Println("QUANTIY JOBS ", len(batchJobs))
-	syncChan := make(chan bool, 1)
-	defer close(syncChan)
-	for i := 0; i < len(batchJobs); i++ {
-		syncChan <- true
-		fmt.Println("EXECUTING JOB ", i+1)
-		batchJobs[i].Execute()
-		fmt.Println("FINISH JOB ", i+1)
-		<-syncChan
+	select {
+	case batchJobs := <-wm.jobs:
+		fmt.Println("EXECUTING JOBS")
+		fmt.Println("QUANTIY JOBS ", len(batchJobs))
+		syncChan := make(chan bool, 1)
+		defer close(syncChan)
+		for i := 0; i < len(batchJobs); i++ {
+			syncChan <- true
+			fmt.Println("EXECUTING JOB ", i+1)
+			batchJobs[i].Execute()
+			fmt.Println("FINISH JOB ", i+1)
+			<-syncChan
+		}
+		fmt.Println("FINISH JOBS")
+	default:
+		wm.executeEmptyNotification()
 	}
-	fmt.Println("FINISH JOBS")
+
 }
 
 type Job struct {
