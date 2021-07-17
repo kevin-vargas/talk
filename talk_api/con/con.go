@@ -20,7 +20,7 @@ type header struct {
 }
 
 type Event struct {
-	eventType
+	Type   eventType
 	Client *Client
 }
 
@@ -93,7 +93,7 @@ func (cm ConnectionManager) Run() {
 		case pack := <-cm.incomingPackage:
 			broadcast(pack, cm.clients)
 		case event := <-cm.incomingEvent:
-			switch event.eventType {
+			switch event.Type {
 			case CREATED:
 				cm.clients = append(cm.clients, event.Client)
 			case CLOSED:
