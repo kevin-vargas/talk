@@ -43,7 +43,9 @@ L:
 
 func (a *Alarm) Stop() {
 	a.Lock()
-	a.on = false
+	if a.on {
+		a.on = false
+		a.stopChan <- true
+	}
 	a.Unlock()
-	a.stopChan <- true
 }

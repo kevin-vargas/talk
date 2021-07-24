@@ -51,6 +51,7 @@ func (tts *TTS) Speak(text string) {
 
 func (tts *TTS) Stop() {
 	tts.Lock()
+	//BroadCast close
 	close(*tts.cancelChan)
 	*tts.cancelChan = make(chan bool)
 	tts.Unlock()
