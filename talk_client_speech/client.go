@@ -22,10 +22,14 @@ func main() {
 	// Establish connection
 	c, _, _ := websocket.DefaultDialer.Dial(u.String(), nil)
 
+	//TTS
+	speaker := tts.New()
+
 	//Creating Worker
 	newMsgNotification := func() {
-		tts.Speak("Hay mensajes nuevos")
+		speaker.Speak("Hay mensajes nuevos")
 	}
+
 	// Alarm
 	alarm := alarm.New(
 		INTERVAL_SECONDS_ALARM,
@@ -37,7 +41,7 @@ func main() {
 	wm := job.New(
 		newMsgNotification,
 		func() {
-			tts.Speak("Usted no posee mensajes")
+			speaker.Speak("Usted no posee mensajes")
 		},
 	)
 
@@ -49,7 +53,7 @@ func main() {
 			_, message, _ := c.ReadMessage()
 			log.Printf("Message received: %s", message)
 			job := func() {
-				tts.Speak(string(message))
+				speaker.Speak(string(message))
 			}
 			wm.AddJob(job)
 		}
@@ -60,10 +64,11 @@ func main() {
 	for scanner.Scan() {
 		result := scanner.Text()
 		if result == "read" {
-			wm.ExecuteJob()
 			if WITH_SPAM {
 				alarm.Stop()
+				speaker.Stop()
 			}
+			wm.ExecuteJob()
 		} else {
 			_ = c.WriteMessage(websocket.TextMessage, []byte(scanner.Text()))
 			log.Printf("Message sent: %s", scanner.Text())

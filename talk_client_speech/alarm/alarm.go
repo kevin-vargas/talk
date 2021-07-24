@@ -25,6 +25,7 @@ func New(interval int, notification func()) *Alarm {
 func (a *Alarm) Start() {
 	a.Lock()
 	if a.on {
+		a.Unlock()
 		return
 	}
 	a.on = true
